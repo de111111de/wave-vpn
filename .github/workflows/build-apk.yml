@@ -46,10 +46,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           SB_VER="1.10.7"
-          
-          # Скачиваем гарантированно существующий arm64 релиз
           curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-arm64.tar.gz" -o sb_arm64.tar.gz
-          
           if [ -f sb_arm64.tar.gz ] && [ $(wc -c < sb_arm64.tar.gz) -gt 1000 ]; then
             tar -xzf sb_arm64.tar.gz
             find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/arm64-v8a/libsingbox.so \;
@@ -74,9 +71,10 @@ jobs:
       - name: Locate and Rename APKs
         run: |
           mkdir -p output_apks
-          find android/app/outputs/flutter-apk -name "*.apk" -exec cp {} output_apks/ \;
-          cp output_apks/app-arm64-v8a-release.apk Wave-arm64-v8a-release.apk || cp output_apks/*.apk Wave-arm64-v8a-release.apk
-          cp output_apks/app-release.apk Wave-universal-release.apk || cp output_apks/*.apk Wave-universal-release.apk
+          # Ищем во всех возможных подпапках Gradle outputs
+          find android/app/build/outputs -name "*.apk" -exec cp {} output_apks/ \;
+          cp output_apks/app-release.apk Wave-arm64-v8a-release.apk || cp output_apks/*.apk Wave-arm64-v8a-release.apk
+          cp output_apks/*.apk Wave-universal-release.apk || true
 
       - name: Upload Wave APK Artifacts
         uses: actions/upload-artifact@v4
