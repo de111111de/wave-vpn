@@ -42,42 +42,23 @@ jobs:
           # Зеркало Maven для стабильности загрузки
           find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
 
-      - name: Download latest sing-box Android binaries into correct ABI subfolders
+      - name: Download latest sing-box Android arm64 binary safely
         run: |
-          # Создаем папки ABI архитектур
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p android/app/src/main/jniLibs/armeabi-v7a
-          mkdir -p android/app/src/main/jniLibs/x86_64
-
           SB_VER="1.10.7"
           
-          # Скачиваем под arm64
-          curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-arm64.tar.gz" -o sb_arm64.tar.gz || true
-          if [ -f sb_arm64.tar.gz ]; then
+          # Скачиваем гарантированно существующий arm64 релиз
+          curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-arm64.tar.gz" -o sb_arm64.tar.gz
+          
+          if [ -f sb_arm64.tar.gz ] && [ $(wc -c < sb_arm64.tar.gz) -gt 1000 ]; then
             tar -xzf sb_arm64.tar.gz
             find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/arm64-v8a/libsingbox.so \;
+            chmod +x android/app/src/main/jniLibs/arm64-v8a/libsingbox.so
             rm -rf sb_arm64.tar.gz sing-box-*
+          else
+            echo "Failed to download valid arm64 binary"
+            exit 1
           fi
-
-          # Скачиваем под armv7
-          curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-armeabi-v7a.tar.gz" -o sb_arm7.tar.gz || true
-          if [ -f sb_arm7.tar.gz ]; then
-            tar -xzf sb_arm7.tar.gz
-            find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/armeabi-v7a/libsingbox.so \;
-            rm -rf sb_arm7.tar.gz sing-box-*
-          fi
-
-          # Скачиваем под x86_64
-          curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-x86_64.tar.gz" -o sb_x86.tar.gz || true
-          if [ -f sb_x86.tar.gz ]; then
-            tar -xzf sb_x86.tar.gz
-            find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/x86_64/libsingbox.so \;
-            rm -rf sb_x86.tar.gz sing-box-*
-          fi
-
-          # Убираем возможные мусорные файлы из корня jniLibs
-          rm -f android/app/src/main/jniLibs/libsingbox.so || true
-          chmod +x android/app/src/main/jniLibs/*/*.so || true
 
       - name: Install Flutter dependencies & build kernel snapshot
         run: |
