@@ -1,0 +1,25 @@
+name: wave
+description: Wave - sing-box based VPN client for Android.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  dio: ^5.7.0
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  yaml: ^3.1.3
+  mobile_scanner: ^6.0.2
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
