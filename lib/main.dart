@@ -465,7 +465,17 @@ class _WaveHomeScreenState extends ConsumerState<WaveHomeScreen> with SingleTick
             if (code == null || code.trim().isEmpty) return;
             scanned = true;
             Navigator.of(ctx).pop();
-            await _handleIncomingLink(code.trim());
+            try {
+              final sub = await ref.read(subsProvider.notifier).importInput(code.trim());
+              final st = ref.read(settingsProvider);
+              if (st.activeSubId == null) {
+                final firstNode = sub.nodes.where((n) => n.supported).firstOrNull;
+                ref.read(settingsProvider.notifier).setActive(sub.id, firstNode?.id);
+              }
+              widget.onToast('Подписка «${sub.name}» импортирована (${sub.nodes.length} нод)');
+            } catch (e) {
+              widget.onToast('Ошибка QR-импорта: $e', isError: true);
+            }
           },
         ),
       ),
