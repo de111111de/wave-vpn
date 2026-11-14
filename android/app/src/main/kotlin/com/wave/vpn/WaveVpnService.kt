@@ -4,14 +4,11 @@ import android.app.Service
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.nio.channels.FileChannel
 
 class WaveVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
 
-    override function onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent != null) {
             when (intent.action) {
                 "START" -> {
@@ -26,7 +23,7 @@ class WaveVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun startVnp(config: String?) {
+    private fun startVpn(config: String?) {
         try {
             val builder = Builder()
             builder.addAddress("10.0.0.2", 24)
