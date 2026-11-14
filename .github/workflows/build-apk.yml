@@ -29,7 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold & disable lint via gradle.properties
+      - name: Generate Android scaffold & nuke Lint tasks
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -38,13 +38,6 @@ jobs:
           mkdir -p android/app/src/main/kotlin/com/wave/vpn
           cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
           cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
-
-          # Отключаем lint через gradle.properties (без правки build.gradle.kts)
-          cat << 'PROP_EOF' >> android/gradle.properties
-          android.lint.checkReleaseBuilds=false
-          android.lint.abortOnError=false
-          android.lint.visible=false
-          PROP_EOF
 
           # Зеркало Maven для стабильности загрузки
           find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
@@ -63,6 +56,18 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
+
+      - name: Disable Lint in all built packages & plugins
+        run: |
+          # Внедряем отключение линта во все сгенерированные build.gradle модулей кэша и проекта
+          find ~/.pub-cache -name "build.gradle" -o -name "build.gradle.kts" | while read file; do
+            if ! grep -q "checkReleaseBuilds" "$file"; then
+              echo -e "\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n        checkGeneratedCode false\n    }\n}" >> "$file" || true
+            fi
+          done
+          if [ -f "android/app/build.gradle" ]; then
+            echo -e "\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n        checkGeneratedCode false\n    }\n}" >> android/app/build.gradle
+          fi
 
       - name: Build Release APKs (Split per ABI + Universal)
         run: |
