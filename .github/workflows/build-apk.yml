@@ -29,41 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Configure Google Maven Central Mirror (Fix HTTP 429)
-        run: |
-          mkdir -p ~/.gradle/init.d
-          cat << 'GRADLE_EOF' > ~/.gradle/init.d/mirror.init.gradle
-          def googleMirror = "https://maven-central.storage-download.googleapis.com/maven2/"
-          gradle.projectsLoaded {
-              rootProject.allprojects {
-                  buildscript {
-                      repositories {
-                          maven { url googleMirror }
-                          google()
-                      }
-                  }
-                  repositories {
-                      maven { url googleMirror }
-                      google()
-                  }
-              }
-          }
-          gradle.settingsEvaluated { settings ->
-              settings.pluginManagement {
-                  repositories {
-                      maven { url googleMirror }
-                      google()
-                      gradlePluginPortal()
-                  }
-              }
-          }
-          GRADLE_EOF
-          cat << 'PROP_EOF' >> ~/.gradle/gradle.properties
-          org.gradle.internal.http.socketTimeout=120000
-          org.gradle.internal.http.connectionTimeout=120000
-          PROP_EOF
-
-      - name: Generate Android scaffold & patch Maven Central URLs
+      - name: Generate Android scaffold & patch Maven Mirror
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -73,8 +39,9 @@ jobs:
           cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
           cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
 
-          # Напрямую заменяем mavenCentral() на зеркало Google во всех .gradle / .kts файлах Flutter и проекта
-          find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }; mavenCentral()|g' {} + || true
+          # Напрямую меняем mavenCentral() на зеркало Google в файлах настроек Gradle (без init.gradle!)
+          find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
+          find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|gradlePluginPortal()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }\n        gradlePluginPortal()|g' {} + || true
 
       - name: Download latest sing-box Android arm64 binary into jniLibs
         run: |
