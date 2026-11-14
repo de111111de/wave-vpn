@@ -49,21 +49,24 @@ jobs:
           curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-arm64.tar.gz" -o sb.tar.gz || true
           if [ -f sb.tar.gz ]; then
             tar -xzf sb.tar.gz
-            find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/arm64-v8a/libsingbox.so \;
-            chmod +x android/app/src/main/jniLibs/arm64-v8a/libsingbox.so || true
+            find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/libsingbox.so \;
+            # Раскладываем под основные архитектуры
+            cp android/app/src/main/jniLibs/libsingbox.so android/app/src/main/jniLibs/arm64-v8a/libsingbox.so
+            mkdir -p android/app/src/main/jniLibs/armeabi-v7a
+            cp android/app/src/main/jniLibs/libsingbox.so android/app/src/main/jniLibs/armeabi-v7a/libsingbox.so
+            mkdir -p android/app/src/main/jniLibs/x86_64
+            cp android/app/src/main/jniLibs/libsingbox.so android/app/src/main/jniLibs/x86_64/libsingbox.so
+            chmod +x android/app/src/main/jniLibs/*/libsingbox.so || true
             rm -rf sb.tar.gz sing-box-*
           fi
 
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Build Release APKs (Split per ABI + Universal, skipping all lint tasks)
+      - name: Build Release APKs (Split per ABI + Universal)
         run: |
-          cd android
-          ./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintRelease
-          cd ..
-          flutter build apk --release --split-per-abi --offline
-          flutter build apk --release --offline
+          flutter build apk --release --split-per-abi
+          flutter build apk --release
 
       - name: Rename APKs for clarity
         run: |
@@ -84,7 +87,7 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: "Wave VPN v1.0.${{ github.run_number }}"
-          body: "Автоматическая сборка Wave VPN (Sing-box Core, Happ/Incy/VLESS/Hysteria2/TUIC/WireGuard)."
+          body: "Автоматическая сборка Wave VPN (Sing-box Core)."
           files: |
             Wave-arm64-v8a-release.apk
             Wave-universal-release.apk
