@@ -29,7 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold & Maven mirror
+      - name: Generate Android scaffold & copy assets
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -38,8 +38,12 @@ jobs:
           mkdir -p android/app/src/main/kotlin/com/wave/vpn
           cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
           cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
+          
+          # Копируем network_security_config.xml в android/app/src/main/res/xml/
+          mkdir -p android/app/src/main/res/xml
+          cp -f android/app/src/main/res/xml/network_security_config.xml android/app/src/main/res/xml/network_security_config.xml || true
 
-          # Зеркало Maven для стабильности загрузки
+          # Зеркало Maven
           find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
 
       - name: Download latest sing-box Android arm64 binary safely
@@ -71,10 +75,7 @@ jobs:
       - name: Locate and Rename APKs Safely
         run: |
           mkdir -p output_apks
-          # Ищем абсолютно все файлы .apk во всей директории проекта и копируем в output_apks
           find . -name "*.apk" ! -path "*/.*" -exec cp -f {} output_apks/ \;
-          
-          # Переименовываем найденное для релизов
           if [ -f output_apks/app-release.apk ]; then
             cp output_apks/app-release.apk Wave-universal-release.apk
             cp output_apks/app-release.apk Wave-arm64-v8a-release.apk
@@ -82,7 +83,6 @@ jobs:
             cp output_apks/app-arm64-v8a-release.apk Wave-arm64-v8a-release.apk
             cp output_apks/app-arm64-v8a-release.apk Wave-universal-release.apk
           else
-            # Универсальный захват любого собранного apk
             cp output_apks/*.apk Wave-arm64-v8a-release.apk || true
             cp output_apks/*.apk Wave-universal-release.apk || true
           fi
