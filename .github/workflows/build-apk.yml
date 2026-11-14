@@ -29,7 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold & nuke Lint tasks
+      - name: Generate Android scaffold & Maven mirror
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -57,22 +57,13 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Disable Lint in all built packages & plugins
+      - name: Build Release APKs (Split per ABI + Universal, skipping all lint tasks)
         run: |
-          # Внедряем отключение линта во все сгенерированные build.gradle модулей кэша и проекта
-          find ~/.pub-cache -name "build.gradle" -o -name "build.gradle.kts" | while read file; do
-            if ! grep -q "checkReleaseBuilds" "$file"; then
-              echo -e "\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n        checkGeneratedCode false\n    }\n}" >> "$file" || true
-            fi
-          done
-          if [ -f "android/app/build.gradle" ]; then
-            echo -e "\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n        checkGeneratedCode false\n    }\n}" >> android/app/build.gradle
-          fi
-
-      - name: Build Release APKs (Split per ABI + Universal)
-        run: |
-          flutter build apk --release --split-per-abi
-          flutter build apk --release
+          cd android
+          ./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintRelease
+          cd ..
+          flutter build apk --release --split-per-abi --offline
+          flutter build apk --release --offline
 
       - name: Rename APKs for clarity
         run: |
