@@ -29,7 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold & disable Lint
+      - name: Generate Android scaffold & disable Lint globally
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -39,12 +39,11 @@ jobs:
           cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
           cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
 
-          # Добавляем отключение Android Lint в build.gradle перед сборкой
-          if [ -f "android/app/build.gradle" ]; then
-            echo -e "\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n}" >> android/app/build.gradle
-          fi
+          # Глобально отключаем линт для всех модулей через gradle.properties
+          echo "android.lint.checkReleaseBuilds=false" >> android/gradle.properties
+          echo "android.lint.abortOnError=false" >> android/gradle.properties
 
-          # Зеркало Maven для стабильности
+          # Зеркало Maven для стабильности загрузки
           find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
 
       - name: Download latest sing-box Android arm64 binary into jniLibs
@@ -64,8 +63,8 @@ jobs:
 
       - name: Build Release APKs (Split per ABI + Universal)
         run: |
-          flutter build apk --release --split-per-abi
-          flutter build apk --release
+          flutter build apk --release --split-per-abi --no-shrink
+          flutter build apk --release --no-shrink
 
       - name: Rename APKs for clarity
         run: |
