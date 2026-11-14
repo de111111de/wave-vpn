@@ -29,7 +29,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold & completely disable Lint
+      - name: Generate Android scaffold & disable lint via gradle.properties
         run: |
           if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android --org com.wave --project-name wave .
@@ -39,12 +39,12 @@ jobs:
           cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
           cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
 
-          # Жестко отключаем lint для всех модулей и подпроектов (включая url_launcher_android)
-          if [ -f "android/build.gradle" ]; then
-            echo -e "\nsubprojects {\n    afterEvaluate {\n        if (extensions.findByName('lint') != null) {\n            lint {\n                checkReleaseBuilds false\n                abortOnError false\n                disable 'All'\n            }\n        }\n    }\n}" >> android/build.gradle
-          elif [ -f "android/build.gradle.kts" ]; then
-            echo -e "\nsubprojects {\n    afterEvaluate {\n        extensions.findByType<com.android.build.gradle.LintOptions>()?.let {\n            it.isCheckReleaseBuilds = false\n            it.isAbortOnError = false\n        }\n    }\n}" >> android/build.gradle.kts
-          fi
+          # Отключаем lint через gradle.properties (без правки build.gradle.kts)
+          cat << 'PROP_EOF' >> android/gradle.properties
+          android.lint.checkReleaseBuilds=false
+          android.lint.abortOnError=false
+          android.lint.visible=false
+          PROP_EOF
 
           # Зеркало Maven для стабильности загрузки
           find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
