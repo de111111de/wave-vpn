@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +15,7 @@ import 'core/models.dart';
 import 'core/net/ping.dart';
 import 'core/platform/vpn_channel.dart';
 import 'core/state/providers.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,7 +78,7 @@ class _WaveAppState extends ConsumerState<WaveApp> {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: isError ? Colors.redAccent : const Color(0xFF00F2FE).withOpacity(0.4)),
+        side: BorderSide(color: isError ? Colors.redAccent : const Color(0xFF00F2FE).withValues(alpha: 0.4)),
       ),
     ));
   }
@@ -87,16 +89,7 @@ class _WaveAppState extends ConsumerState<WaveApp> {
       title: 'Wave',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: _messengerKey,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF05070F),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF00F2FE),
-          secondary: Color(0xFF4FACFE),
-          surface: Color(0xFF0B1120),
-        ),
-        useMaterial3: true,
-      ),
+      theme: WaveTheme.dark(),
       home: WaveHomeScreen(onToast: _toast),
     );
   }
@@ -207,121 +200,23 @@ class _WaveHomeScreenState extends ConsumerState<WaveHomeScreen> with SingleTick
     );
   }
 
-  Widget _buildTopBar(VpnState vpn, List<Subscription> subs) {
-    final isConn = vpn.status == VpnStatus.connected;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(colors: [Color(0xFF00F2FE), Color(0xFF4FACFE)]),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF00F2FE).withOpacity(isConn ? 0.55 : 0.2),
-                  blurRadius: 14,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.waves_rounded, color: Color(0xFF05070F), size: 22),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'WAVE',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 2.2),
-              ),
-              Text(
-                isConn
-                    ? 'RIDING THE WAVE • SING-BOX'
-                    : (vpn.status == VpnStatus.connecting ? 'CONNECTING TUNNEL...' : 'ABYSSAL CORE READY'),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.1,
-                  color: isConn ? const Color(0xFF00F2FE) : Colors.white54,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Сканировать QR',
-            onPressed: () => _openQrScanner(context),
-            icon: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF00F2FE)),
-          ),
-          IconButton(
-            tooltip: 'Добавить подписку / ключ',
-            onPressed: () => _showAddSubscriptionModal(context),
-            icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF00F2FE)),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar(VpnState vpn, List<Subscription> subs) => WaveTopBar(
+        connected: vpn.status == VpnStatus.connected,
+        connecting: vpn.status == VpnStatus.connecting,
+        onScan: () => _openQrScanner(context),
+        onAdd: () => _showAddSubscriptionModal(context),
+      );
 
-  Widget _buildDockBar() {
-    const items = [
-      (Icons.power_settings_new_rounded, 'Wave'),
-      (Icons.layers_rounded, 'Подписки'),
-      (Icons.alt_route_rounded, 'Роутинг'),
-      (Icons.terminal_rounded, 'Логи'),
-    ];
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              height: 64,
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A).withOpacity(0.75),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFF00F2FE).withOpacity(0.18)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(items.length, (i) {
-                  final active = _tab == i;
-                  return Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _tab = i),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            items[i].$1,
-                            size: 22,
-                            color: active ? const Color(0xFF00F2FE) : Colors.white54,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            items[i].$2,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                              color: active ? const Color(0xFF00F2FE) : Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildDockBar() => WaveDock(
+        index: _tab,
+        onChanged: (i) => setState(() => _tab = i),
+        items: const [
+          (Icons.power_settings_new_rounded, 'Wave'),
+          (Icons.layers_rounded, 'Подписки'),
+          (Icons.alt_route_rounded, 'Роутинг'),
+          (Icons.terminal_rounded, 'Логи'),
+        ],
+      );
 
   Future<void> _showAddSubscriptionModal(BuildContext context) async {
     final ctrl = TextEditingController();
@@ -380,7 +275,7 @@ class _WaveHomeScreenState extends ConsumerState<WaveHomeScreen> with SingleTick
                   fillColor: const Color(0xFF05070F),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: const Color(0xFF00F2FE).withOpacity(0.25)),
+                    borderSide: BorderSide(color: const Color(0xFF00F2FE).withValues(alpha: 0.25)),
                   ),
                   suffixIcon: IconButton(
                     tooltip: 'Вставить из буфера',
@@ -511,78 +406,28 @@ class _DashboardTab extends ConsumerWidget {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
-      children: [
+      children: <Widget>[
         const SizedBox(height: 16),
-        Center(
-          child: GestureDetector(
-            onTap: () {
-              if (isConn || isConnecting) {
-                ref.read(vpnProvider.notifier).disconnect();
-              } else {
-                ref.read(vpnProvider.notifier).connect();
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              width: 190,
-              height: 190,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: isConn
-                      ? [const Color(0xFF00F2FE).withOpacity(0.35), const Color(0xFF0F172A).withOpacity(0.9)]
-                      : [const Color(0xFF1E293B).withOpacity(0.6), const Color(0xFF090D16)],
-                ),
-                border: Border.all(
-                  width: 2.5,
-                  color: isConn
-                      ? const Color(0xFF00F2FE)
-                      : (isConnecting ? Colors.amberAccent : const Color(0xFF00F2FE).withOpacity(0.25)),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isConn ? const Color(0xFF00F2FE).withOpacity(0.45) : Colors.black54,
-                    blurRadius: isConn ? 42 : 20,
-                    spreadRadius: isConn ? 4 : 0,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isConnecting ? Icons.sync_rounded : Icons.power_settings_new_rounded,
-                    size: 56,
-                    color: isConn ? const Color(0xFF00F2FE) : Colors.white,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isConn ? 'ПОДКЛЮЧЕНО' : (isConnecting ? 'ЗАПУСК...' : 'СТАРТ'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.6,
-                      color: isConn ? const Color(0xFF00F2FE) : Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    elapsed,
-                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white54),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        PowerButton(
+          connected: isConn,
+          connecting: isConnecting,
+          elapsed: elapsed,
+          onTap: () {
+            if (isConn || isConnecting) {
+              ref.read(vpnProvider.notifier).disconnect();
+            } else {
+              ref.read(vpnProvider.notifier).connect();
+            }
+          },
         ),
         if (vpn.message != null && vpn.message!.isNotEmpty) ...[
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.15),
+              color: Colors.redAccent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
             ),
             child: Text(
               vpn.message!,
@@ -609,7 +454,7 @@ class _DashboardTab extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       '${_fmtBytes(vpn.down)}/s',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      style: WaveText.num(18),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -636,7 +481,7 @@ class _DashboardTab extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       '${_fmtBytes(vpn.up)}/s',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      style: WaveText.num(18),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -659,7 +504,7 @@ class _DashboardTab extends ConsumerWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00F2FE).withOpacity(0.12),
+                  color: const Color(0xFF00F2FE).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
@@ -749,7 +594,7 @@ class _DashboardTab extends ConsumerWidget {
             ],
           ),
         ),
-      ],
+      ].animate(interval: 70.ms).fadeIn(duration: 380.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
     );
   }
 
@@ -785,7 +630,7 @@ class _DashboardTab extends ConsumerWidget {
                 ListTile(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   selected: st.activeNodeId == null,
-                  selectedTileColor: const Color(0xFF00F2FE).withOpacity(0.12),
+                  selectedTileColor: const Color(0xFF00F2FE).withValues(alpha: 0.12),
                   leading: const Text('⚡', style: TextStyle(fontSize: 22)),
                   title: const Text('Автовыбор (Sing-box URL-Test)', style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: const Text('Автоматически держит ноду с минимальной задержкой'),
@@ -807,7 +652,7 @@ class _DashboardTab extends ConsumerWidget {
                         enabled: n.supported,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         selected: selected,
-                        selectedTileColor: const Color(0xFF00F2FE).withOpacity(0.12),
+                        selectedTileColor: const Color(0xFF00F2FE).withValues(alpha: 0.12),
                         leading: Text(n.flag, style: const TextStyle(fontSize: 22)),
                         title: Text(n.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(n.supported ? '${n.badge} • ${n.server}:${n.port}' : (n.reason ?? 'Не поддерживается')),
@@ -916,7 +761,7 @@ class _SubscriptionsTab extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00F2FE).withOpacity(0.15),
+                        color: const Color(0xFF00F2FE).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1010,12 +855,12 @@ class _SubscriptionsTab extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: (settings.activeSubId == sub.id && settings.activeNodeId == node.id)
-                            ? const Color(0xFF00F2FE).withOpacity(0.14)
+                            ? const Color(0xFF00F2FE).withValues(alpha: 0.14)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: (settings.activeSubId == sub.id && settings.activeNodeId == node.id)
-                              ? const Color(0xFF00F2FE).withOpacity(0.5)
+                              ? const Color(0xFF00F2FE).withValues(alpha: 0.5)
                               : Colors.transparent,
                         ),
                       ),
@@ -1347,30 +1192,8 @@ class _LogsTabState extends State<_LogsTab> {
 
 // ───────────────────────── SHARED WIDGETS & PAINTER ─────────────────────────
 
-class _GlassCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final VoidCallback? onTap;
-
-  const _GlassCard({
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final box = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withOpacity(0.68),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF00F2FE).withOpacity(0.16)),
-      ),
-      child: child,
-    );
-    return onTap != null ? InkWell(borderRadius: BorderRadius.circular(20), onTap: onTap, child: box) : box;
-  }
+class _GlassCard extends GlassCard {
+  const _GlassCard({required super.child, super.padding, super.onTap});
 }
 
 class _PingBadge extends StatelessWidget {
@@ -1412,37 +1235,67 @@ class WaveBackgroundPainter extends CustomPainter {
     required this.trafficSpeed,
   });
 
+  void _blob(Canvas c, Offset o, double r, Color col, double a) {
+    c.drawCircle(
+      o,
+      r,
+      Paint()..shader = RadialGradient(colors: [col.withValues(alpha: a), col.withValues(alpha: 0)]).createShader(Rect.fromCircle(center: o, radius: r)),
+    );
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    // aurora glow
+    final drift = sin(phase) * 26;
+    final glow = connected ? 0.30 : 0.15;
+    _blob(canvas, Offset(size.width * 0.88 + drift, size.height * 0.10), size.width * 0.8, W.violet, glow);
+    _blob(canvas, Offset(size.width * 0.02 - drift, size.height * 0.34), size.width * 0.75, W.cyan, glow * 0.8);
+
+    // layered waves, amplitude follows real traffic
     final boost = connected ? (1.0 + (log(trafficSpeed + 1) / 18.0).clamp(0.0, 1.4)) : (connecting ? 0.85 : 0.45);
-    final baseHeight = size.height * (connected ? 0.62 : 0.76);
+    final baseHeight = size.height * (connected ? 0.64 : 0.78);
 
     for (var layer = 0; layer < 3; layer++) {
-      final path = Path();
       final amp = (16.0 + layer * 9.0) * boost;
       final freq = 1.4 + layer * 0.45;
       final layerPhase = phase * (1.0 + layer * 0.35) + layer * 1.1;
       final yOffset = baseHeight + layer * 28.0;
 
-      path.moveTo(0, size.height);
-      path.lineTo(0, yOffset);
+      final line = Path()..moveTo(0, yOffset);
       for (double x = 0; x <= size.width; x += 6) {
-        final y = yOffset + sin((x / size.width * 2 * pi * freq) + layerPhase) * amp;
-        path.lineTo(x, y);
+        line.lineTo(x, yOffset + sin((x / size.width * 2 * pi * freq) + layerPhase) * amp);
       }
-      path.lineTo(size.width, size.height);
-      path.close();
+      final fill = Path.from(line)
+        ..lineTo(size.width, size.height)
+        ..lineTo(0, size.height)
+        ..close();
 
-      final color = connected
-          ? const Color(0xFF00F2FE).withOpacity(0.11 - layer * 0.025)
-          : const Color(0xFF4FACFE).withOpacity(0.06 - layer * 0.015);
-      canvas.drawPath(path, Paint()..color = color);
+      final a = (connected ? 0.20 : 0.09) - layer * 0.045;
+      canvas.drawPath(
+        fill,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [W.cyan.withValues(alpha: a), W.blue.withValues(alpha: 0)],
+          ).createShader(Rect.fromLTWH(0, yOffset - amp, size.width, size.height - yOffset + amp)),
+      );
+      canvas.drawPath(
+        line,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..shader = LinearGradient(colors: [
+            W.cyan.withValues(alpha: (connected ? 0.7 : 0.25) - layer * 0.15),
+            W.violet.withValues(alpha: (connected ? 0.7 : 0.25) - layer * 0.15),
+          ]).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant WaveBackgroundPainter old) =>
-      old.phase != phase || old.connected != connected || old.trafficSpeed != trafficSpeed;
+      old.phase != phase || old.connected != connected || old.connecting != connecting || old.trafficSpeed != trafficSpeed;
 }
 
 String _fmtBytes(int b) {

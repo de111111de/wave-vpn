@@ -2,106 +2,111 @@ name: Build Wave APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+env:
+  SING_BOX_VERSION: v1.10.7   # libbox API in WaveVpnService.kt is written against this tag
+  FLUTTER_VERSION: 3.32.8     # android/*.gradle.kts match this Flutter template
+  NDK_VERSION: 27.0.12077973
+
 jobs:
-  build-android:
-    name: Compile Wave Android APK (Sing-box Core)
+  build:
+    name: Wave APK (sing-box libbox core)
     runs-on: ubuntu-latest
-
+    timeout-minutes: 60
+    env:
+      WAVE_KS_PASS: ${{ secrets.WAVE_KS_PASS }}
+      WAVE_KEY_ALIAS: ${{ secrets.WAVE_KEY_ALIAS }}
+      WAVE_KEY_PASS: ${{ secrets.WAVE_KEY_PASS }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: android-actions/setup-android@v3
+
+      - name: Android SDK / NDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Cache libbox.aar
+        id: libbox
+        uses: actions/cache@v4
         with:
-          channel: 'stable'
+          path: libbox.aar
+          key: libbox-${{ env.SING_BOX_VERSION }}-ndk${{ env.NDK_VERSION }}
+
+      - uses: actions/setup-go@v5
+        if: steps.libbox.outputs.cache-hit != 'true'
+        with:
+          go-version: "1.23.x"
+
+      - name: Build libbox.aar from sing-box source
+        if: steps.libbox.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${SING_BOX_VERSION}" https://github.com/SagerNet/sing-box.git sing-box-src
+          cd sing-box-src
+          go run ./cmd/internal/build_libbox -target android
+          cp libbox.aar "$GITHUB_WORKSPACE/libbox.aar"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
-      - name: Generate Android scaffold & copy assets
+      - name: Android scaffold (only files that are missing in the repo)
         run: |
-          if [ ! -f "android/gradlew" ]; then
-            flutter create --platforms=android --org com.wave --project-name wave .
-          fi
-          cp -f android_src/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-          mkdir -p android/app/src/main/kotlin/com/wave/vpn
-          cp -f android_src/MainActivity.kt android/app/src/main/kotlin/com/wave/vpn/MainActivity.kt
-          cp -f android_src/WaveVpnService.kt android/app/src/main/kotlin/com/wave/vpn/WaveVpnService.kt
-          
-          # Копируем network_security_config.xml в android/app/src/main/res/xml/
-          mkdir -p android/app/src/main/res/xml
-          cp -f android/app/src/main/res/xml/network_security_config.xml android/app/src/main/res/xml/network_security_config.xml || true
+          flutter create --platforms=android --org com.wave --project-name vpn _scaffold
+          cp -rn _scaffold/android/. android/
+          rm -rf _scaffold
+          mkdir -p android/app/libs
+          cp libbox.aar android/app/libs/libbox.aar
 
-          # Зеркало Maven
-          find "$FLUTTER_ROOT/packages/flutter_tools/gradle" android -type f \( -name "*.gradle" -o -name "*.kts" \) -exec sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|g' {} + || true
-
-      - name: Download latest sing-box Android arm64 binary safely
+      - name: Release keystore (optional secret WAVE_KEYSTORE_B64)
+        env:
+          KS_B64: ${{ secrets.WAVE_KEYSTORE_B64 }}
         run: |
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          SB_VER="1.10.7"
-          curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/sing-box-${SB_VER}-android-arm64.tar.gz" -o sb_arm64.tar.gz
-          if [ -f sb_arm64.tar.gz ] && [ $(wc -c < sb_arm64.tar.gz) -gt 1000 ]; then
-            tar -xzf sb_arm64.tar.gz
-            find . -name "sing-box" -type f -exec cp {} android/app/src/main/jniLibs/arm64-v8a/libsingbox.so \;
-            chmod +x android/app/src/main/jniLibs/arm64-v8a/libsingbox.so
-            rm -rf sb_arm64.tar.gz sing-box-*
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/wave.jks"
+            echo "WAVE_KEYSTORE=$RUNNER_TEMP/wave.jks" >> "$GITHUB_ENV"
           else
-            echo "Failed to download valid arm64 binary"
-            exit 1
+            echo "No keystore secret: signing with the debug key"
           fi
 
-      - name: Install Flutter dependencies & build kernel snapshot
-        run: |
-          flutter pub get
-          flutter precache --android
+      - run: flutter pub get
 
-      - name: Build APK using pure Gradle
+      - name: Build split APKs
         run: |
-          cd android
-          ./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintRelease
-          cd ..
+          flutter build apk --release --split-per-abi
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   dist/Wave-arm64-v8a-release.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/Wave-armeabi-v7a-release.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk      dist/Wave-x86_64-release.apk
 
-      - name: Locate and Rename APKs Safely
+      - name: Build universal APK
         run: |
-          mkdir -p output_apks
-          find . -name "*.apk" ! -path "*/.*" -exec cp -f {} output_apks/ \;
-          if [ -f output_apks/app-release.apk ]; then
-            cp output_apks/app-release.apk Wave-universal-release.apk
-            cp output_apks/app-release.apk Wave-arm64-v8a-release.apk
-          elif [ -f output_apks/app-arm64-v8a-release.apk ]; then
-            cp output_apks/app-arm64-v8a-release.apk Wave-arm64-v8a-release.apk
-            cp output_apks/app-arm64-v8a-release.apk Wave-universal-release.apk
-          else
-            cp output_apks/*.apk Wave-arm64-v8a-release.apk || true
-            cp output_apks/*.apk Wave-universal-release.apk || true
-          fi
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Wave-universal-release.apk
 
-      - name: Upload Wave APK Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Wave-Android-APK
-          path: |
-            Wave-arm64-v8a-release.apk
-            Wave-universal-release.apk
+          path: dist/*.apk
 
       - name: Publish to GitHub Releases
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: "Wave VPN v1.0.${{ github.run_number }}"
-          body: "Автоматическая сборка Wave VPN (Sing-box Core)."
-          files: |
-            Wave-arm64-v8a-release.apk
-            Wave-universal-release.apk
+          name: Wave VPN v1.0.${{ github.run_number }}
+          body: Автосборка Wave (sing-box ${{ env.SING_BOX_VERSION }}, libbox).
+          files: dist/*.apk
