@@ -24,6 +24,7 @@ import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.PlatformInterface
+import io.nekohasekai.libbox.SetupOptions
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
@@ -102,7 +103,11 @@ class WaveVpnService : VpnService(), PlatformInterface {
         val work = File(base, "work")
         val tmp = File(cacheDir, "sing-box")
         work.mkdirs(); tmp.mkdirs()
-        Libbox.setup(base.path, work.path, tmp.path, false)
+        Libbox.setup(SetupOptions().also {
+            it.basePath = base.path
+            it.workingPath = work.path
+            it.tempPath = tmp.path
+        })
     }
 
     private fun startCore(configPath: String?, apiPort: Int, secret: String) {
@@ -229,7 +234,7 @@ class WaveVpnService : VpnService(), PlatformInterface {
         while (v6.hasNext()) { val a = v6.next(); b.addAddress(a.address(), a.prefix()) }
 
         if (options.autoRoute) {
-            b.addDnsServer(options.dnsServerAddress)
+            b.addDnsServer(options.dnsServerAddress.value)
             val r4 = options.inet4RouteAddress
             if (r4.hasNext()) {
                 while (r4.hasNext()) { val a = r4.next(); b.addRoute(a.address(), a.prefix()) }
@@ -328,13 +333,6 @@ class WaveVpnService : VpnService(), PlatformInterface {
                 this.name = name
                 index = ni.index
                 runCatching { mtu = ni.mtu }
-                dnsServer = StringArray(lp.dnsServers.mapNotNull { it.hostAddress })
-                type = when {
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> Libbox.InterfaceTypeWIFI
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> Libbox.InterfaceTypeCellular
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> Libbox.InterfaceTypeEthernet
-                    else -> Libbox.InterfaceTypeOther
-                }
                 addresses = StringArray(ni.interfaceAddresses.map { "${it.address.hostAddress?.substringBefore('%')}/${it.networkPrefixLength}" })
                 var fl = 0
                 if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) fl = OsConstants.IFF_UP or OsConstants.IFF_RUNNING
@@ -342,7 +340,6 @@ class WaveVpnService : VpnService(), PlatformInterface {
                 if (ni.isPointToPoint) fl = fl or OsConstants.IFF_POINTOPOINT
                 if (ni.supportsMulticast()) fl = fl or OsConstants.IFF_MULTICAST
                 flags = fl
-                metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
             }
         }
         return InterfaceArray(out)
@@ -352,6 +349,7 @@ class WaveVpnService : VpnService(), PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun readWIFIState(): WIFIState? = null
     override fun clearDNSCache() {}
+    override fun sendNotification(notification: io.nekohasekai.libbox.Notification?) {}
 
     private class StringArray(private val list: List<String>) : StringIterator {
         private var i = 0
