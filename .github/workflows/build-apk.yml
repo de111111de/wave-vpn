@@ -57,6 +57,9 @@ jobs:
         run: |
           git clone --depth 1 --branch "${SING_BOX_VERSION}" https://github.com/SagerNet/sing-box.git sing-box-src
           cd sing-box-src
+          go install -v github.com/sagernet/gomobile/cmd/gomobile@v0.1.4
+          go install -v github.com/sagernet/gomobile/cmd/gobind@v0.1.4
+          export PATH="$PATH:$(go env GOPATH)/bin"
           go run ./cmd/internal/build_libbox -target android
           cp libbox.aar "$GITHUB_WORKSPACE/libbox.aar"
 
